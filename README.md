@@ -26,7 +26,6 @@ Ray-MMD
 #### 更新内容 :
 ##### 2016-11-17 ver 1.1.0beta
 * 修复使用ALBEDO_MAP_APPLY_DIFFUSE时多次乘算扩散色
-* material_common.fxsub中,只对Albedo贴图进行srgb转换
 
 ##### 2016-11-16 ver 1.1.0beta
 * 改进了FXAA
