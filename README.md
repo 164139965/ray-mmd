@@ -24,6 +24,18 @@ Ray-MMD
 * [Visual studio code](http://code.visualstudio.com/Download)
 
 #### 更新内容 :
+##### 2016-11-19 ver 1.1.0beta
+* 改进了Bloom
+* 改进了SphereFog
+* 添加了旧版本的BloomTonemapping
+
+##### 2016-11-17 ver 1.1.0beta
+* 修复使用ALBEDO_MAP_APPLY_DIFFUSE时多次乘算扩散色
+
+##### 2016-11-16 ver 1.1.0beta
+* 改进了FXAA
+* 修复了GroundFog和AtmosphericFog载入错误
+
 ##### 2016-11-15 ver 1.1.0beta
 * 注 : 法线贴图效果和SP(NormalMap使用OpenGL模式)保持一致,如果凹凸颠倒设置normalMapScale = -1.0;
 * 独立GroundFog, 添加SphereFog [(预览)](https://github.com/ray-cast/images/raw/master/fog_110.jpg)

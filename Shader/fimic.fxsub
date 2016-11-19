@@ -301,7 +301,8 @@ float4 BloomBlurPS(in float2 coord : TEXCOORD0, uniform sampler source, uniform 
     
     float2 offset0 = coord + offset;
     float2 offset1 = coord - offset;
-    
+
+    [unroll]    
     for (int i = 1; i < n; ++i)
     {
         float w = GaussianWeight(i, n);
