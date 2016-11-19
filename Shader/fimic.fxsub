@@ -1,5 +1,5 @@
-static float StarScale = 256;
-static float BloomScale = 512;
+const float StarScale = 256;
+const float BloomScale = 512;
 
 static float2 BloomOffset1 = ViewportOffset2 * 2;
 static float2 BloomOffset2 = ViewportOffset2 * 4;
@@ -98,9 +98,8 @@ sampler BloomSamp4th = sampler_state {
     AddressU = BORDER; AddressV = BORDER; BorderColor = 0.0;
 };
 
-#if HDR_BLOOM_QUALITY > 1
-
-#if HDR_BLOOM_QUALITY == 2
+#if HDR_STAR_MODE > 0
+#if HDR_STAR_MODE == 1
 float4 star_colorCoeff1st[4] = {float4(0.1,0.15,0.475,0.5),float4(0.096,0.144,0.456,0.48),float4(0.04608,0.09216,0.41472,0.4608),float4(0.0884736,0.13271,0.42025,0.442368)};
 float4 star_colorCoeff2nd[4] = {float4(0.1,0.15,0.475,0.5),float4(0.0849346,0.127402,0.40344,0.424673),float4(0.0360695,0.072139,0.324625,0.360695),float4(0.061271,0.0919064,0.291037,0.306355)};
 float4 star_colorCoeff3rd[4] = {float4(0.1,0.15,0.475,0.5),float4(0.0260201,0.0520403,0.234181,0.260201),float4(0.00270819,0.013541,0.134055,0.13541),float4(0.00140935,0.00704675,0.0697628,0.0704675)};
@@ -162,11 +161,11 @@ sampler StreakSamp4thTemp = sampler_state {
 };
 #endif
 
-#if HDR_FLARE_ENABLE > 0
+#if HDR_FLARE_MODE > 0
 float4 ghost_scalar1st = float4(-4.0, 3.0, -2.0, 0.3);
 float4 ghost_scalar2nd = float4(3.6, 2.0, 0.9, -0.77);
 
-#if HDR_BLOOM_QUALITY == 2
+#if HDR_FLARE_MODE == 1
 float4 ghost_modulation1st[4] = {float4(0.1, 0.10, 1.00, 1.0), float4(0.2, 0.30, 1.0, 1.0), float4(0.10, 0.20, 0.60, 1.0), float4(0.60, 0.30, 1.00, 1.0)};
 float4 ghost_modulation2nd[4] = {float4(0.6, 0.20, 0.20, 1.0), float4(0.2, 0.06, 0.6, 1.0), float4(0.15, 0.00, 0.10, 1.0), float4(0.06, 0.00, 0.55, 1.0)};
 #else
@@ -275,8 +274,13 @@ float4 GlareDetectionPS(
     color = min(color, tex2D(source, coord4));
     color = min(color, tex2D(source, coord5));
     
-    float4 bloom = max(color - (1.0 - mBloomThreshold) / (mBloomThreshold + EPSILON), 0.0);   
-    bloom *= lerp(0.1, 20, mBloomIntensity);
+#if HDR_BLOOM_MODE > 1
+    float4 bloom = saturate(color - (1.0 - mBloomThreshold) / (mBloomThreshold + EPSILON));
+#else
+    float4 bloom = max(color - (1.0 - mBloomThreshold) / (mBloomThreshold + EPSILON), 0.0);
+#endif
+
+    bloom *= lerp(mBloomIntensityMin, mBloomIntensityMax, mBloomIntensity);
     
     float4 MRT3 = tex2D(Gbuffer3Map, coord1);
     float4 MRT4 = tex2D(Gbuffer4Map, coord1);
@@ -289,8 +293,30 @@ float4 GlareDetectionPS(
     return bloom;
 }
 
-float4 BloomBlurPS(in float2 coord : TEXCOORD0, uniform sampler source, uniform float2 offset) : COLOR
-{    
+float4 BloomBlurPS(in float2 coord : TEXCOORD0, uniform sampler source, uniform float2 offset, uniform int n) : COLOR
+{
+#if HDR_BLOOM_MODE == 2
+    float weight = GaussianWeight(0, n);
+    float4 color = tex2D(source, coord) * weight;
+    
+    float2 offset0 = coord + offset;
+    float2 offset1 = coord - offset;
+    
+    for (int i = 1; i < n; ++i)
+    {
+        float w = GaussianWeight(i, n);
+        
+        color += tex2D(source, offset0) * w;
+        color += tex2D(source, offset1) * w;
+        
+        offset0 += offset;
+        offset1 -= offset;
+        
+        weight += 2.0 * w;
+    }
+
+    return color / weight;
+#else
     const float weights[15] = { 153, 816, 3060, 8568, 18564, 31824, 43758, 48620, 43758, 31824, 18564, 8568, 3060, 816, 153 };
     const float weightSum = 262106.0;
     
@@ -304,6 +330,7 @@ float4 BloomBlurPS(in float2 coord : TEXCOORD0, uniform sampler source, uniform 
     }
 
     return color;
+#endif
 }
 
 float BloomFactor(float factor) 
@@ -347,12 +374,10 @@ float4 StarStreakPS(
 
 float4 GlareLightCompPS(in float2 coord : TEXCOORD0) : COLOR
 {
-    float bloomFactors[] = {0.8, 0.6, 0.4, 0.2};
-    
-    float4 bloom1 = BloomFactor(bloomFactors[0]) * tex2D(BloomSamp1st, coord);
-    float4 bloom2 = BloomFactor(bloomFactors[1]) * tex2D(BloomSamp2nd, coord);
-    float4 bloom3 = BloomFactor(bloomFactors[2]) * tex2D(BloomSamp3rd, coord);
-    float4 bloom4 = BloomFactor(bloomFactors[3]) * tex2D(BloomSamp4th, coord);
+    float4 bloom1 = BloomFactor(mBloomFactors[0]) * tex2D(BloomSamp1st, coord);
+    float4 bloom2 = BloomFactor(mBloomFactors[1]) * tex2D(BloomSamp2nd, coord);
+    float4 bloom3 = BloomFactor(mBloomFactors[2]) * tex2D(BloomSamp3rd, coord);
+    float4 bloom4 = BloomFactor(mBloomFactors[3]) * tex2D(BloomSamp4th, coord);
     
     float4 bloom = 0.0f;
     bloom += bloom1;
@@ -360,9 +385,9 @@ float4 GlareLightCompPS(in float2 coord : TEXCOORD0) : COLOR
     bloom += bloom3;
     bloom += bloom4;
     
-#if HDR_BLOOM_QUALITY > 1
+#if HDR_STAR_MODE > 0
     float4 star = max(tex2D(StreakSamp1st, coord), tex2D(StreakSamp2nd, coord));
-    #if HDR_BLOOM_QUALITY > 2
+    #if HDR_STAR_MODE > 1
         star = max(star, max(tex2D(StreakSamp3rd, coord), tex2D(StreakSamp4th, coord)));
     #endif
     bloom += star;
@@ -399,10 +424,11 @@ float4 GhostImagePS(
     uniform sampler source4, 
     uniform float4 colorCoeff[4], uniform float threshold) : COLOR
 {
-    float4 color1 = (tex2D(source1, coord0) - threshold / (1 - threshold + EPSILON) * 10) * tex2D(source4, coord0) * colorCoeff[0];
-    float4 color2 = (tex2D(source1, coord1) - threshold / (1 - threshold + EPSILON) * 10) * tex2D(source4, coord1) * colorCoeff[1];
-    float4 color3 = (tex2D(source2, coord2) - threshold / (1 - threshold + EPSILON) * 10) * tex2D(source4, coord2) * colorCoeff[2];
-    float4 color4 = (tex2D(source3, coord3) - threshold / (1 - threshold + EPSILON) * 10) * tex2D(source4, coord3) * colorCoeff[3];
+    float ghostThreshold = threshold / (1 - threshold + EPSILON) * mBloomGhostThresholdMax;
+    float4 color1 = (tex2D(source1, coord0) - ghostThreshold) * tex2D(source4, coord0) * colorCoeff[0];
+    float4 color2 = (tex2D(source1, coord1) - ghostThreshold) * tex2D(source4, coord1) * colorCoeff[1];
+    float4 color3 = (tex2D(source2, coord2) - ghostThreshold) * tex2D(source4, coord2) * colorCoeff[2];
+    float4 color4 = (tex2D(source3, coord3) - ghostThreshold) * tex2D(source4, coord3) * colorCoeff[3];
     return max(0, (color1 + color2 + color3 + color4));
 }
 
@@ -438,47 +464,27 @@ float3 FilmicTonemap(float3 x)
     return ((x*(A*x+C*B)+D*E) / (x*(A*x+B)+D*F)) - E / F;
 }
 
-float3 ToneMapping(float3 color, float exposure)
+float3 ApplyToneMapping(float3 color)
 {
-#if HDR_TONEMAP_OPERATOR == 0
-    return color * exposure;
-#elif HDR_TONEMAP_OPERATOR == 1
-    color = color * exposure;
+#if HDR_TONEMAP_OPERATOR == 1
     float3 curr = ACESFilmRec709(color);
-    return lerp(curr, color, mTonemapping);
+    return saturate(lerp(curr, color, mTonemapping));
 #elif HDR_TONEMAP_OPERATOR == 2
-    color = color * exposure;
     float3 curr = ACESFilmRec2020(color);
-    return lerp(curr, color, mTonemapping);
+    return saturate(lerp(curr, color, mTonemapping));
 #elif HDR_TONEMAP_OPERATOR == 3
-    color = color * exposure;
     float3 curr = FilmicTonemap(color * 2);
     float3 whiteScale = 1.0f / FilmicTonemap(11.2);
     curr = curr * whiteScale;
-    return lerp(curr, color, mTonemapping);
+    return saturate(lerp(curr, color, mTonemapping));
 #elif HDR_TONEMAP_OPERATOR == 4
-    color = color * exposure;
     float3 curr = 2 * FilmicTonemap(color);
     float3 whiteScale = 1.0f / FilmicTonemap(11.2);
     curr = curr * whiteScale;
-    return lerp(curr, color, mTonemapping);
+    return saturate(lerp(curr, color, mTonemapping));
 #else
-    return color * exposure;
+    return saturate(color);
 #endif
-}
-
-float3 ColorBalance(float3 color, float4 balance)
-{
-    float3 lum = luminance(color);
-    color = lerp(lum, color, 1 - balance.a);
-    color *= balance.rgb;
-    return color;
-}
-
-float3 AppleVignette(float3 color, float2 coord, float inner, float outer)
-{
-    float L = length(coord * 2 - 1);
-    return color * smoothstep(outer, inner, L);
 }
 
 float3 AppleDispersion(sampler source, float2 coord, float inner, float outer)
@@ -489,6 +495,25 @@ float3 AppleDispersion(sampler source, float2 coord, float inner, float outer)
     color.g = tex2D(source, coord - ViewportOffset2 * L * (mDispersion * 8)).g;
     color.b = tex2D(source, coord + ViewportOffset2 * L * (mDispersion * 8)).b;
     return color;
+}
+
+float3 ApplyVignette(float3 color, float2 coord)
+{
+    float L = length(coord * 2 - 1);
+    return color * smoothstep(mVignetteOuter - mVignette, mVignetteInner - mVignette, L);
+}
+
+float3 ApplyColorBalance(float3 color)
+{
+    float3 lum = luminance(color);
+    color = lerp(lum, color, 1 - mColBalance);
+    color *= float3(1 + float3(mColBalanceRP, mColBalanceGP, mColBalanceBP) - float3(mColBalanceRM, mColBalanceGM, mColBalanceBM));
+    return color;
+}
+
+float3 ApplyContrast(float3 color)
+{
+    return lerp(0.18, color, 1 + mContrastP - mContrastM * 0.5);
 }
 
 float4 FilmicToneMappingPS(in float2 coord: TEXCOORD0, uniform sampler source) : COLOR
@@ -503,21 +528,20 @@ float4 FilmicToneMappingPS(in float2 coord: TEXCOORD0, uniform sampler source) :
     color += DecodeGBufferEmissive(MRT3, MRT4);
     color += DecodeGBufferEmissive(MRT7, MRT8);
     
-#if HDR_ENABLE && HDR_BLOOM_QUALITY > 0
+#if HDR_ENABLE && HDR_BLOOM_MODE > 0
     float3 bloom = tex2D(GlareLightMapSamp, coord).rgb;
-    float3 balance = float3(1 + float3(mColBalanceRP, mColBalanceGP, mColBalanceBP) - float3(mColBalanceRM, mColBalanceGM, mColBalanceBM));
-    color = lerp(color, bloom, 0.33);
-    color = ColorBalance(color, float4(balance, mColBalance));
-    color = ToneMapping(color, 1.5 + mExposure * 10);
-#else
-    float3 balance = float3(1 + float3(mColBalanceRP, mColBalanceGP, mColBalanceBP) - float3(mColBalanceRM, mColBalanceGM, mColBalanceBM));
-    color = ColorBalance(color, float4(balance, mColBalance));
-    color = ToneMapping(color, 1 + mExposure * 10);
+    color += lerp(bloom, 0, mBloomTonemapping);
 #endif
     
-    color = lerp(0.18, color, 1 + mContrastP - mContrastM * 0.5);
-    color = AppleVignette(color, coord, 1.5 - mVignette, 2.5 - mVignette);
-    color = saturate(color);
+    color = ApplyVignette(color, coord);
+    color = ApplyColorBalance(color);
+    color = ApplyToneMapping(color * (mExposureMin + mExposure * mExposureMax));
+    
+#if HDR_ENABLE && HDR_BLOOM_MODE > 0
+    color += lerp(0, bloom, mBloomTonemapping);
+#endif
+    
+    color = ApplyContrast(color);
     
 #if AA_QUALITY == 0
     color = linear2srgb(color);
