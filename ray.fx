@@ -81,13 +81,13 @@ void ScreenSpaceQuadVS(
 }
 
 float Script : STANDARDSGLOBAL <
-	string ScriptOutput = "color";
-	string ScriptClass  = "scene";
-	string ScriptOrder  = "postprocess";
+    string ScriptOutput = "color";
+    string ScriptClass  = "scene";
+    string ScriptOrder  = "postprocess";
 > = 0.8;
 
 technique DeferredLighting<
-	string Script =
+    string Script =
     "RenderColorTarget0=;"
     "RenderDepthStencilTarget=DepthBuffer;"
     "ClearSetColor=BackColor;"
