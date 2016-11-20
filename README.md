@@ -24,6 +24,9 @@ Ray-MMD
 * [Visual studio code](http://code.visualstudio.com/Download)
 
 #### 更新内容 :
+##### 2016-11-20 ver 1.1.0beta
+* 添加了SphereLight IBL [(预览)](https://github.com/ray-cast/ray-mmd/raw/1.1.0beta/Tutorial/05-SphereLight IBL/README.jpg)
+
 ##### 2016-11-19 ver 1.1.0beta
 * 改进了Bloom
 * 改进了SphereFog
